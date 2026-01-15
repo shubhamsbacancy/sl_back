@@ -25,6 +25,16 @@ export class AdminController {
         }
     }
 
+    static async verifyVendorShop(req: AuthRequest, res: Response) {
+        try {
+            const { id } = req.params;
+            const result = await AdminServices.verifyVendorShop(id);
+            return ApiResponse.success("Vendor shop verified successfully", result);
+        } catch (error) {
+            return ApiResponse.error(error);
+        }
+    }
+
     static async getShopDetailById(req: AuthRequest, res: Response) {
         try {
             const { id } = req.params;

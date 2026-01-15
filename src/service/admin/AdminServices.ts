@@ -13,6 +13,8 @@ import { Barber } from "../../models/vendor/barber.model";
 import ShopBankDetails from "../../models/vendor/shop_bank_details";
 import { ShopKycDetail } from "../../models/vendor/shop_kyc.model";
 import { PaginationReqMeta } from "../../utils/pagination.utils";
+import { ShopLocation } from "../../models/vendor/shop_location";
+import { open, stat } from "fs";
 
 export class AdminServices {
 
@@ -75,6 +77,19 @@ export class AdminServices {
         }
     }
 
+    static async verifyVendorShop(shopId: string): Promise<void> {
+        try {
+            const shop = await Shop.findOne({ where: { id: shopId } });
+            if (!shop) {
+                throw new AppErrors("No shop exist with the given Id")
+            }
+
+            shop.isVerified = !shop.isVerified;
+            await shop.save();
+        } catch (error: any) {
+            throw new AppErrors(error.message)
+        }
+    }
 
     static async getShopDetailById(shopId: string): Promise<any> {
         try {
@@ -95,13 +110,27 @@ export class AdminServices {
 
 
             const response = {
-                has_verified_bank: shopPlain.shop_bank_details !== null || shopPlain.shop_bank_details !== undefined,
-                has_verified_kyc: shopPlain.shop_kyc_details !== null || shopPlain.shop_kyc_details !== undefined,
+                shop_details: {
+                    id: shopPlain.id,
+                    has_verified_bank: shopPlain.shop_bank_details !== null || shopPlain.shop_bank_details !== undefined,
+                    has_verified_kyc: shopPlain.shop_kyc_details !== null || shopPlain.shop_kyc_details !== undefined,
+                    isVerified: shopPlain.isVerified,
+                    status: shopPlain.status,
+                    weekly_off_day: shopPlain.weekly_off_day,
+                    opening_time: shopPlain.opening_time,
+                    closing_time: shopPlain.closing_time,
+                    shop_name: shopPlain.shop_name,
+                    shop_description: shopPlain.shop_description,
+                    total_shop_count: totalShopCount,
+                    createdAt: shopPlain.createdAt,
+                    updatedAt: shopPlain.updatedAt,
+                },
                 // recent_appointments: recentAppointments,
                 shop_owner: {
                     ...shopPlain.shop_owner,
-                    total_shop_count: totalShopCount,
+
                 },
+                shop_location: shopPlain.shop_location,
                 shop_kyc_details: shopPlain.shop_kyc_details,
                 shop_bank_details: shopPlain.shop_bank_details,
                 shop_barbers: shopPlain.shop_barbers,
@@ -195,7 +224,7 @@ export class AdminServices {
                 include: AdminServiceIncludes.getAllApointmentsInclude(),
 
                 where: whereClause,
-                attributes: ['id', 'appointment_date', 'status', "shop_id"],
+                attributes: ['id', 'appointment_date', 'status', "shop_id", 'service_duration', 'extra_duration'],
                 offset: paginationQuery.offset,
                 limit: paginationQuery.limit,
             });
@@ -230,7 +259,10 @@ export class AdminServices {
                 const shopName = appointementsInstance.shop.shop_name;
                 const customerName = `${appointementsInstance.customer.first_name} ${appointementsInstance.customer.last_name}`
 
+                const customerMobile = appointementsInstance.customer.mobile;
                 const serviceInstance = appointementsInstance.services;
+
+                const duration = appointementsInstance.service_duration + (appointementsInstance.extra_duration || 0);
 
                 const appointmentAmt = serviceInstance.reduce(
                     (sum: number, service: any) => sum + (service.price ?? 0),
@@ -268,19 +300,23 @@ export class AdminServices {
 
                     serviceList.push({ id: service.service.id, name: service.service.name });
                 }
+
+                delete appointementsInstance.service_duration;
+                delete appointementsInstance.extra_duration;
                 delete appointementsInstance.shop;
                 delete appointementsInstance.customer;
                 delete appointementsInstance.services;
                 return {
                     ...appointementsInstance,
                     customer_name: customerName,
+                    customer_mobile: customerMobile,
+                    service_duration_minutes: duration,
                     shop_name: shopName,
                     appointment_amt: appointmentAmt,
                     services_count: serviceList.length,
                     services: serviceList,
                 }
             })
-
             return {
                 total_earnings,
                 todays_earnings,
@@ -321,6 +357,11 @@ class AdminServiceIncludes {
             {
                 model: User,
                 as: "shop_user"
+            },
+            {
+                model: ShopLocation,
+                as: "shop_location",
+                attributes: { exclude: ['shop_id', 'user_id', 'createdAt', 'updatedAt'] },
             }
         ];
     }
@@ -352,6 +393,12 @@ class AdminServiceIncludes {
                         as: "shops"
                     }
                 ]
+            },
+            {
+                model: ShopLocation,
+                as: "shop_location",
+                attributes: { exclude: ['shop_id', 'user_id', 'createdAt', 'updatedAt'] },
+
             },
             {
                 model: Service,
@@ -407,7 +454,7 @@ class AdminServiceIncludes {
             {
                 model: User,
                 as: "customer",
-                attributes: ['id', 'first_name', "last_name",]
+                attributes: ['id', 'first_name', "last_name", "mobile", "email"]
             },
             {
                 model: Shop,

@@ -59,8 +59,8 @@ export class AdminAuthService {
             // fallback (should never reach here)
             throw new AppErrors("Admin account already exists.")
 
-        } catch (error) {
-            throw new AppErrors("Failed to register admin user.")
+        } catch (error: any) {
+            throw new AppErrors(error.message)
         }
     }
 
