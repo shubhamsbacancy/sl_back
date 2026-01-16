@@ -20,7 +20,7 @@ export enum Status {
     ACTIVE = "active",
     BLOCKED = "blocked",
     DEACTIVED = "de-activated",
-    DISABLED = "disabled"
+    FROZEN = "frozen"
 }
 
 

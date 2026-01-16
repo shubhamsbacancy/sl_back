@@ -13,12 +13,19 @@ export class AdminController {
             const requestBody = req.body;
 
             const paginationQuery = PaginationUtils.getPagination(req.query);
-
-            const parsedBody = AdminShopFilterSchema.safeParse(requestBody || {});
-            if (!parsedBody.success) {
-                return ApiResponse.error(parsedBody.error);
+            let query: any = {};
+            if (req.query.status) {
+                query['status'] = req.query.status;
             }
-            const vendors = await AdminServices.getAllVendorShops(parsedBody.data, paginationQuery);
+
+            if (req.query.isVerified) {
+                query['isVerified'] = req.query.isVerified === 'true' ? true : false;
+            }
+            // const parsedBody = AdminShopFilterSchema.safeParse(requestBody || {});
+            // if (!parsedBody.success) {
+            //     return ApiResponse.error(parsedBody.error);
+            // }
+            const vendors = await AdminServices.getAllVendorShops(query, paginationQuery);
             return ApiResponse.success('Vendors retrieved successfully', vendors);
         } catch (error) {
             return ApiResponse.error(error);
@@ -40,6 +47,16 @@ export class AdminController {
             const { id } = req.params;
             const result = await AdminServices.getShopDetailById(id);
             return ApiResponse.success("Shop fetched successfully", result);
+        } catch (error) {
+            return ApiResponse.error(error);
+        }
+    }
+
+    static async updateShopStatus(req: AuthRequest, res: Response) {
+        try {
+            const { id, status } = req.body;
+            const result = await AdminServices.updateShopStatus(id, status);
+            return ApiResponse.success(result);
         } catch (error) {
             return ApiResponse.error(error);
         }
@@ -81,5 +98,15 @@ export class AdminController {
         }
     }
 
+    static async getAppointmentByShopId(req: AuthRequest, res: Response) {
+        try {
+            const { id } = req.params;
+            const paginationQuery = PaginationUtils.getPagination(req.query);
+            const appointment = await AdminServices.getAppointmentByShopId(id, paginationQuery);
+            return ApiResponse.success("Appointment fetched successfully", appointment);
+        } catch (error) {
+            return ApiResponse.error(error);
+        }
 
+    }
 }

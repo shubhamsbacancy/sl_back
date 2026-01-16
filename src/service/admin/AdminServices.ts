@@ -222,7 +222,6 @@ export class AdminServices {
 
             const appointments = await Appointment.findAll({
                 include: AdminServiceIncludes.getAllApointmentsInclude(),
-
                 where: whereClause,
                 attributes: ['id', 'appointment_date', 'status', "shop_id", 'service_duration', 'extra_duration'],
                 offset: paginationQuery.offset,
@@ -261,7 +260,7 @@ export class AdminServices {
 
                 const customerMobile = appointementsInstance.customer.mobile;
                 const serviceInstance = appointementsInstance.services;
-
+                const barber = appointementsInstance.barber;
                 const duration = appointementsInstance.service_duration + (appointementsInstance.extra_duration || 0);
 
                 const appointmentAmt = serviceInstance.reduce(
@@ -306,11 +305,13 @@ export class AdminServices {
                 delete appointementsInstance.shop;
                 delete appointementsInstance.customer;
                 delete appointementsInstance.services;
+                delete appointementsInstance.barber;
                 return {
                     ...appointementsInstance,
                     customer_name: customerName,
                     customer_mobile: customerMobile,
-                    service_duration_minutes: duration,
+                    service_duration: duration,
+                    barber_name: barber ? barber.name : null,
                     shop_name: shopName,
                     appointment_amt: appointmentAmt,
                     services_count: serviceList.length,
@@ -330,6 +331,88 @@ export class AdminServices {
         }
     }
 
+
+    static async getAppointmentByShopId(shopId: string, paginationQuery: PaginationReqMeta): Promise<any> {
+        try {
+            const appointments = await Appointment.findAll({
+                where: { shop_id: shopId },
+                offset: paginationQuery.offset, limit: paginationQuery.limit,
+                include: AdminServiceIncludes.getAllApointmentsInclude(),
+                attributes: ['id', 'appointment_date', 'status', "shop_id", 'service_duration', 'extra_duration'],
+            });
+
+            const formattedResponse = appointments.map((aptInstance) => {
+
+                const appointementsInstance = aptInstance.get({ plain: true }) as any;
+                const shopName = appointementsInstance.shop.shop_name;
+                const customerName = `${appointementsInstance.customer.first_name} ${appointementsInstance.customer.last_name}`
+
+                const customerMobile = appointementsInstance.customer.mobile;
+                const serviceInstance = appointementsInstance.services;
+                const barber = appointementsInstance.barber;
+                const duration = appointementsInstance.service_duration + (appointementsInstance.extra_duration || 0);
+
+                const appointmentAmt = serviceInstance.reduce(
+                    (sum: number, service: any) => sum + (service.price ?? 0),
+                    0
+                );
+
+                let serviceList = [];
+                for (const service of serviceInstance) {
+
+                    serviceList.push({ id: service.service.id, name: service.service.name });
+                }
+
+                delete appointementsInstance.service_duration;
+                delete appointementsInstance.extra_duration;
+                delete appointementsInstance.shop;
+                delete appointementsInstance.customer;
+                delete appointementsInstance.services;
+                delete appointementsInstance.barber;
+                return {
+                    ...appointementsInstance,
+                    customer_name: customerName,
+                    customer_mobile: customerMobile,
+                    service_duration: duration,
+                    barber_name: barber ? barber.name : null,
+                    shop_name: shopName,
+                    appointment_amt: appointmentAmt,
+                    services_count: serviceList.length,
+                    services: serviceList,
+                }
+            })
+            return formattedResponse;
+        } catch (error: any) {
+            throw new AppErrors(error.message);
+        }
+    }
+
+    static async updateShopStatus(shopId: string, status: Status): Promise<any> {
+        try {
+            const shop = await Shop.findOne({ where: { id: shopId } });
+            if (!shop) {
+                throw new AppErrors("No shop exist with the given Id")
+            }
+
+            shop.status = status;
+            await shop.save();
+            let message = `Shop has been ${status} successfully`;
+
+            if (status === Status.ACTIVE) {
+                message = "Shop has been activated successfully"
+            } else if (status === Status.BLOCKED) {
+                message = "Shop has been blocked successfully"
+            } else if (status === Status.DEACTIVED) {
+                message = "Shop has been de-activated successfully"
+            } else if (status === Status.FROZEN) {
+                message = "Shop has been frozen successfully"
+            }
+
+            return message;
+        } catch (error: any) {
+            throw new AppErrors(error.message)
+        }
+    }
 
 
 }
@@ -451,6 +534,11 @@ class AdminServiceIncludes {
 
     static getAllApointmentsInclude() {
         return [
+            {
+                model: Barber,
+                as: "barber",
+                attributes: ['id', 'name', "email", "mobile", "email", 'status']
+            },
             {
                 model: User,
                 as: "customer",
